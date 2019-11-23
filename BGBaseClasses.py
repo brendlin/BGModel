@@ -1,4 +1,6 @@
 import math
+import time
+import datetime
 
 #------------------------------------------------------------------
 def InsulinActionCurve(time_hr,Ta) :
@@ -22,19 +24,43 @@ def InsulinActionCurveDerivative(time_hr,Ta) :
 #------------------------------------------------------------------
 class BGEventBase :
     
-    def __init__(self,iov_0,iov_1) :
-        self.iov_0 = iov_0 # ut
-        self.iov_1 = iov_1 # ut
+    def __init__(self,iov_0_utc,iov_1_utc) :
+        self.iov_0_utc = iov_0_utc
+        self.iov_1_utc = iov_1_utc
         return
 
+    @staticmethod
+    def GetUtcFromString(iov_str) :
+        """call via BGEventBase.GetUtcFromString('02/24/2019 12:00:00')"""
+        """or       BGEventBase.GetUtcFromString('2019-02-24T12:00:00')"""
+
+        try :
+            # Medtronic csv format
+            iov_utc = int(time.mktime(time.strptime(iov_str,"%m/%d/%y %H:%M:%S")))
+            return iov_utc
+
+        except ValueError :
+
+            try :
+                # Tidepool format
+                iov_utc = int(time.mktime(time.strptime(iov_str, '%Y-%m-%dT%H:%M:%S')))
+                return iov_utc
+
+            except ValueError :
+                pass
+
+        print('Error: could not convert to UTC: %s or %s'%(iov_str))
+        import sys; sys.exit()
+        return None
+
     def Duration_hr(self) :
-        return (self.iov_1 - self.iov_0)/float(MyTime.OneHour)
+        return (self.iov_1_utc - self.iov_0_utc)/3600.
 
     def AffectsBG(self) :
         try :
             return self.affectsBG
         except AttributeError :
-            print 'Please indicate whether %s affects BG!'%(self.__class__.__name__)
+            print('Please indicate whether %s affects BG!'%(self.__class__.__name__))
             import sys; sys.exit()
         return False
 
@@ -78,23 +104,23 @@ class BGEventBase :
 #------------------------------------------------------------------
 class BGActionBase(BGEventBase) :
 
-    def __init__(self,iov_0,iov_1) :
-        BGEventBase.__init__(self,iov_0,iov_1)
+    def __init__(self,iov_0_utc,iov_1_utc) :
+        BGEventBase.__init__(self,iov_0_utc,iov_1_utc)
         return
 
     def getTa(self,settings,whichTa) :
         if hasattr(self,'Ta') :
             return self.Ta
-        return getattr(settings,whichTa)(self.iov_0)
+        return getattr(settings,whichTa)(self.iov_0_utc)
 
     def getIntegralBase(self,time_start,time_end,settings,whichTa) :
         # whichTa is a string (either 'getInsulinTa' or 'getFoodTa')
 
-        if time_end < self.iov_0 :
+        if time_end < self.iov_0_utc :
             return 0.
 
-        time_hr_start = (time_start - self.iov_0)/float(MyTime.OneHour)
-        time_hr_end   = (time_end   - self.iov_0)/float(MyTime.OneHour)
+        time_hr_start = (time_start - self.iov_0_utc)/3600.
+        time_hr_end   = (time_end   - self.iov_0_utc)/3600.
 
         # Get the appropriate decay time
         Ta = self.getTa(settings,whichTa)
@@ -108,7 +134,7 @@ class BGActionBase(BGEventBase) :
     # The BG equivalent of "Active Insulin"
     def BGEffectRemaining(self,time_ut,settings) :
         
-        infinity = time_ut+MyTime.OneYear
+        infinity = time_ut + datetime.timedelta(days=30).total_seconds()
 
         # getIntegral is virtual, specified in the derived class
         return self.getIntegral(time_ut,infinity,settings)
@@ -117,10 +143,10 @@ class BGActionBase(BGEventBase) :
     # Derivative, useful for making e.g. absorption plots
     def getBGEffectDerivPerHourBase(self,time_ut,settings,whichTa) :
 
-        if (time_ut < self.iov_0) or (time_ut > self.iov_1) :
+        if (time_ut < self.iov_0_utc) or (time_ut > self.iov_1_utc) :
             return 0.
 
-        time_hr = (time_ut-self.iov_0)/float(MyTime.OneHour)
+        time_hr = (time_ut - self.iov_0_utc)/3600.
         Ta = self.getTa(settings,whichTa)
 
         return InsulinActionCurveDerivative(time_hr,Ta) * self.getMagnitudeOfBGEffect(settings)

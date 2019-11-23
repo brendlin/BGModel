@@ -1,7 +1,6 @@
 from BGBaseClasses import *
-
-from TimeClass import MyTime
-from Settings import HistToList
+from Settings import *
+import datetime as dt
 
 #------------------------------------------------------------------
 def findFirstBG(conts) :
@@ -13,8 +12,8 @@ def findFirstBG(conts) :
 
 #------------------------------------------------------------------
 class Annotation(BGEventBase) :
-    def __init__(self,iov_0,iov_1,annotation) :
-        BGEventBase.__init__(self,iov_0,iov_1)
+    def __init__(self,iov_0_utc,iov_1_utc,annotation) :
+        BGEventBase.__init__(self,iov_0_utc,iov_1_utc)
         self.annotation = annotation.replace('\x00','').strip()
         return
 
@@ -23,17 +22,25 @@ class BGMeasurement(BGEventBase) :
     #
     # BG Reading
     #
-    def __init__(self,iov_0,iov_1,const_BG) :
-        BGEventBase.__init__(self,iov_0,iov_1)
+    def __init__(self,iov_0_utc,iov_1_utc,const_BG) :
+        BGEventBase.__init__(self,iov_0_utc,iov_1_utc)
         self.affectsBG = False
         self.const_BG = const_BG # real BG reading
         self.firstBG = False
+
+    @classmethod
+    def FromStringDate(cls,iov_0_str,iov_1_str,const_BG) :
+        """call via my_inst = BGMeasurement.FromStringDate('2019-02-24T12:00:00','2019-02-24T12:45:00',175)"""
+
+        iov_0_utc = BGEventBase.GetUtcFromString(iov_0_str)
+        iov_1_utc = BGEventBase.GetUtcFromString(iov_1_str)
+        return cls(iov_0_utc,iov_1_utc,const_BG)
 
 #------------------------------------------------------------------
 class InsulinBolus(BGActionBase) :
 
     def __init__(self,time_ut,insulin) :
-        BGActionBase.__init__(self,time_ut,time_ut + 6.*MyTime.OneHour)
+        BGActionBase.__init__(self,time_ut,time_ut + dt.timedelta(hours=6).total_seconds())
         self.affectsBG = True
         self.insulin = insulin
         self.UserInputCarbSensitivity = 2
@@ -46,9 +53,14 @@ class InsulinBolus(BGActionBase) :
         self.BWZBGInput            = 0
         self.BWZCarbRatio          = 0
 
+    @classmethod
+    def FromStringDate(cls,time_str,insulin) :
+        time_utc = BGEventBase.GetUtcFromString(time_str)
+        return cls(time_utc,insulin)
+
     # This used to be called getEffectiveSensitivity, but that name is misleading for food.
     def getMagnitudeOfBGEffect(self,settings) :
-        return settings.getInsulinSensitivity(self.iov_0) * self.insulin
+        return settings.getInsulinSensitivity(self.iov_0_utc) * self.insulin
 
     def getIntegral(self,time_start,time_end,settings) :
         return self.getIntegralBase(time_start,time_end,settings,'getInsulinTa')
@@ -61,10 +73,10 @@ class InsulinBolus(BGActionBase) :
 
         star = ' *' if not self.BWZMatchedDelivered else ''
         decaytime = ' %d hour decay'%(self.UserInputCarbSensitivity) if (self.UserInputCarbSensitivity > 2) else ''
-        print 'Bolus, %s (input BG: %d mg/dl) (S=%d)'%(MyTime.StringFromTime(self.iov_0),self.BWZBGInput,self.BWZInsulinSensitivity)
+        print('Bolus, %s (input BG: %d mg/dl) (S=%d)'%(time.ctime(self.iov_0_utc),self.BWZBGInput,self.BWZInsulinSensitivity))
 
         def PrintDetails(title,item,postscript='') :
-            print title + ('%2.1f u;'%(item)).rjust(10)+(' %2.1f mg/dl'%(item*self.BWZInsulinSensitivity)).rjust(15)+(' %2.1f g'%(item*self.BWZCarbRatio)).rjust(10)+postscript
+            print(title + ('%2.1f u;'%(item)).rjust(10)+(' %2.1f mg/dl'%(item*self.BWZInsulinSensitivity)).rjust(15)+(' %2.1f g'%(item*self.BWZCarbRatio)).rjust(10)+postscript)
             return
 
         PrintDetails('  Total Delivered insulin : ',self.insulin,star)
@@ -80,7 +92,7 @@ class InsulinBolus(BGActionBase) :
 class SquareWaveBolus(BGEventBase) :
 
     def __init__(self,time_ut,duration_hr,insulin) :
-        BGEventBase.__init__(self,time_ut,time_ut + duration_hr + 6.*MyTime.OneHour)
+        BGEventBase.__init__(self,time_ut,time_ut + duration_hr + dt.timedelta(hours=6).total_seconds())
         self.affectsBG = True
         self.insulin = insulin
         self.duration_hr = duration_hr
@@ -91,19 +103,26 @@ class SquareWaveBolus(BGEventBase) :
 
         time_it = time_ut
 
-        while time_it < (time_ut + MyTime.OneHour*self.duration_hr) :
+        while time_it < (time_ut + dt.timedelta(hours=self.duration_hr).total_seconds()) :
 
             # bolus value is total value divided by number of steps
             bolus_val = self.insulin * time_step_hr / float(self.duration_hr)
 
             minibolus = InsulinBolus(time_it,bolus_val)
             self.miniBoluses.append(minibolus)
-            #print "mini-bolus with %.2f insulin"%(bolus_val)
+            #print("mini-bolus with %.2f insulin"%(bolus_val))
 
             # increment by one time step
-            time_it += time_step_hr*MyTime.OneHour
+            time_it += dt.timedelta(hours=time_step_hr).total_seconds()
 
         return
+
+    @classmethod
+    def FromStringDate(cls,time_str,duration_hr,insulin) :
+        """call via my_inst = SquareWaveBolus.FromStringDate('2019-02-24T12:00:00',3,4.0)"""
+
+        iov_0_utc = BGEventBase.GetUtcFromString(time_str)
+        return cls(iov_0_utc,duration_hr,insulin)
 
     def getBGEffectDerivPerHourTimesInterval(self,time_start,delta_hr,settings) :
         return sum(c.getBGEffectDerivPerHourTimesInterval(time_start,delta_hr,settings) for c in self.miniBoluses)
@@ -118,14 +137,14 @@ class SquareWaveBolus(BGEventBase) :
         return sum(c.BGEffectRemaining(time_ut,settings) for c in self.miniBoluses)
 
     def Print(self) :
-        print 'Square bolus, %s : Duration %.1fh, %2.1fu\n'%(MyTime.StringFromTime(self.iov_0),self.duration_hr,self.insulin)
+        print('Square bolus, %s : Duration %.1fh, %2.1fu\n'%(time.ctime(self.iov_0_utc),self.duration_hr,self.insulin))
         return
 
 #------------------------------------------------------------------
 class DualWaveBolus(BGEventBase) :
 
     def __init__(self,time_ut,duration_hr,insulin_square,insulin_inst) :
-        BGEventBase.__init__(self,time_ut,time_ut + duration_hr + 6.*MyTime.OneHour)
+        BGEventBase.__init__(self,time_ut,time_ut + duration_hr + dt.timedelta(hours=6).total_seconds())
         self.affectsBG = True
         self.insulin_square = insulin_square
         self.insulin_inst = insulin_inst
@@ -133,6 +152,13 @@ class DualWaveBolus(BGEventBase) :
 
         self.square = SquareWaveBolus(time_ut,duration_hr,insulin_square)
         self.inst = InsulinBolus(time_ut,insulin_inst)
+
+    @classmethod
+    def FromStringDate(cls,time_str,duration_hr,insulin_square,insulin_inst) :
+        """call via my_inst = DualWaveBolus.FromStringDate('2019-02-24T12:00:00',3,4.0)"""
+
+        iov_utc = BGEventBase.GetUtcFromString(time_str)
+        return cls(iov_utc,duration_hr,insulin_square,insulin_inst)
 
     def getBGEffectDerivPerHourTimesInterval(self,time_start,delta_hr,settings) :
         return sum(c.getBGEffectDerivPerHourTimesInterval(time_start,delta_hr,settings) for c in [self.square,self.inst])
@@ -146,8 +172,8 @@ class DualWaveBolus(BGEventBase) :
 #------------------------------------------------------------------
 class Food(BGActionBase) :
 
-    def __init__(self,iov_0,iov_1,food) :
-        BGActionBase.__init__(self,iov_0,iov_1)
+    def __init__(self,iov_utc,food) :
+        BGActionBase.__init__(self,iov_utc,iov_utc + dt.timedelta(hours=6).total_seconds())
         self.affectsBG = True
         self.food = food
 
@@ -157,8 +183,15 @@ class Food(BGActionBase) :
 
         return
 
+    @classmethod
+    def FromStringDate(cls,time_str,food) :
+        """call via my_inst = Food.FromStringDate('2019-02-24T12:00:00',30)"""
+
+        iov_utc = BGEventBase.GetUtcFromString(time_str)
+        return cls(iov_utc,food)
+
     def getMagnitudeOfBGEffect(self,settings) :
-        return settings.getFoodSensitivity(self.iov_0) * self.food
+        return settings.getFoodSensitivity(self.iov_0_utc) * self.food
 
     def getIntegral(self,time_start,time_end,settings) :
         # If it has its own tA, then the base class knows to override the settings.
@@ -195,11 +228,11 @@ class Food(BGActionBase) :
         if self.fattyMeal :
             recommendation += '** '
         recommendation += 'Fitted FOOD'
-        recommendation += ' at %s'%(MyTime.StringFromTime(self.iov_0))
+        recommendation += ' at %s'%(time.ctime(self.iov_0_utc))
         recommendation += ' %d -> %d grams'%(self.original_value,self.food)
         if hasattr(self,'Ta') :
             recommendation += ', Ta = %.2f'%(self.Ta)
-        print recommendation
+        print(recommendation)
         return recommendation
 
 #------------------------------------------------------------------
@@ -219,7 +252,9 @@ class LiverBasalGlucose(BGEventBase) :
         return
 
     def getBin(self,time_ut) :
-        bin = int(MyTime.GetTimeOfDay(time_ut)/float(self.binWidth_hr))
+        # time of day (in hours, fractional)
+        lt = time.localtime(time_ut)
+        bin = int( (lt.tm_hour + lt.tm_min/60.)/float(self.binWidth_hr) )
         return bin
 
     def getSmearedList(self,settings) :
@@ -239,7 +274,7 @@ class LiverBasalGlucose(BGEventBase) :
                 val += tmp[j%(len(tmp))]
             self.LiverHourlyGlucoseFine[i] = val/float(n)
 
-        #print ''.join('%2.1f '%(a) for a in LiverHourlyGlucoseFine)
+        #print(''.join('%2.1f '%(a) for a in LiverHourlyGlucoseFine))
         return self.LiverHourlyGlucoseFine
 
 
@@ -253,30 +288,31 @@ class LiverBasalGlucose(BGEventBase) :
         it_time = time_start
         liver_bin = self.getBin(it_time)
 
-        time_start_day_4am = MyTime.RoundDownToTheDay(time_start)
+        tmp = time.localtime(time_start)
+        time_start_day = time_start - tmp.tm_sec - 60*tmp.tm_min - 3600*tmp.tm_hour
 
-        # print 'Getting integral for',MyTime.StringFromTime(time_start),MyTime.StringFromTime(time_end)
+        # print('Getting integral for',time.ctime(time_start),time.ctime(time_end))
 
         # Go through times up to the end, plus one bin width (in order to avoid missing the last bin)
-        while (it_time <= time_end + self.binWidth_hr*MyTime.OneHour) :
+        while (it_time <= time_end + dt.timedelta(hours=self.binWidth_hr).total_seconds()) :
 
             # For each bin, find the valid time interval (in hours)
             # This should ensure that the final bin is treated correctly.
-            low_edge = max(time_start,time_start_day_4am + liver_bin    *self.binWidth_hr*MyTime.OneHour)
-            up_edge  = min(time_end  ,time_start_day_4am + (liver_bin+1)*self.binWidth_hr*MyTime.OneHour)
+            low_edge = max(time_start,time_start_day + liver_bin    *dt.timedelta(hours=self.binWidth_hr).total_seconds() )
+            up_edge  = min(time_end  ,time_start_day + (liver_bin+1)*dt.timedelta(hours=self.binWidth_hr).total_seconds() )
 
             if up_edge < low_edge :
                 break
 
-            delta_time_hr = (up_edge - low_edge)/float(MyTime.OneHour)
-            # print 'bin edges:',MyTime.StringFromTime(time_start_day_4am + liver_bin    *self.binWidth_hr*MyTime.OneHour),
-            # print              MyTime.StringFromTime(time_start_day_4am + (liver_bin+1)*self.binWidth_hr*MyTime.OneHour)
-            # print MyTime.StringFromTime(low_edge), MyTime.StringFromTime(up_edge), delta_time_hr
+            delta_time_hr = (up_edge - low_edge)/3600.
+            # print('bin edges:',time.ctime(time_start_day + liver_bin    *self.binWidth_hr*3600.))
+            # print(             time.ctime(time_start_day + (liver_bin+1)*self.binWidth_hr*3600.))
+            # print(time.ctime(low_edge), time.ctime(up_edge), delta_time_hr)
 
             # return (Glucose / hour) * D(hour)
             sum += delta_time_hr * tmp_LiverHourlyGlucoseFine[liver_bin % self.nBins]
 
-            it_time += self.binWidth_hr*MyTime.OneHour
+            it_time += self.binWidth_hr*3600.
             liver_bin += 1
 
         return sum
@@ -287,7 +323,7 @@ class LiverBasalGlucose(BGEventBase) :
     def getBGEffectDerivPerHourTimesInterval(self,time_start,delta_hr,settings) :
 
         # Yeah this is really just the integral.
-        return self.getIntegral(time_start,time_start + delta_hr*MyTime.OneHour,settings)
+        return self.getIntegral(time_start,time_start + delta_hr*3600.,settings)
 
     def getBGEffectDerivPerHour(self,time_ut,settings) :
 
@@ -307,28 +343,30 @@ class BasalInsulin(BGEventBase) :
 
     def getBin(self,time_ut) :
         # From 4am ... and assuming 48 bins
-        return int(2*MyTime.GetTimeOfDay(time_ut))
+        return int(2 * (time.localtime(time_ut).tm_hour + time.localtime(time_ut).tm_min/60.) )
 
-    def __init__(self,iov_0,iov_1,h_basal,h_insulin=[],containers=[]) :
-        BGEventBase.__init__(self,iov_0,iov_1)
+    def __init__(self,iov_0_utc,iov_1_utc,basal_rates,sensitivities=[],containers=[]) :
+        BGEventBase.__init__(self,iov_0_utc,iov_1_utc)
         self.affectsBG = True
         self.BasalRates = [0]*48
-        HistToList(h_basal,self.BasalRates)
+        TrueUserProfile.SettingsArrayToList(basal_rates,self.BasalRates)
 
         # Insulin sensitivity is needed to make liver events
         tmp_InsulinSensitivityList = [0]*48
-        if h_insulin :
-            HistToList(h_insulin,tmp_InsulinSensitivityList)
+        if sensitivities :
+            TrueUserProfile.SettingsArrayToList(sensitivities,tmp_InsulinSensitivityList)
 
         self.basalBoluses = []
-        time_ut = MyTime.RoundDownToTheHour(iov_0)
+
+        # Rounded down to the nearest hour:
+        time_ut = iov_0_utc - 60*time.localtime(iov_0_utc).tm_min - time.localtime(iov_0_utc).tm_sec
 
         # Update every 6 minutes...!
         time_step_hr = 0.1
 
         fattyEvents = dict()
 
-        while time_ut < iov_1 :
+        while time_ut < iov_1_utc :
 
             basalFactor = 1
             bolus_val = self.BasalRates[self.getBin(time_ut)]*float(time_step_hr)*basalFactor
@@ -339,7 +377,7 @@ class BasalInsulin(BGEventBase) :
                 if not c.IsTempBasal() :
                     continue
 
-                if c.iov_0 > time_ut or time_ut > c.iov_1 :
+                if c.iov_0_utc > time_ut or time_ut > c.iov_1_utc :
                     continue
 
                 basalFactor = c.basalFactor
@@ -349,20 +387,20 @@ class BasalInsulin(BGEventBase) :
                 if basalFactor > 1 :
                     bolusSlice = insulin_sensi*bolus_val*(basalFactor-1)
 
-                    if c.iov_0 not in fattyEvents.keys() :
-                        Ta_tempBasal = (c.iov_1 - c.iov_0) / float(MyTime.OneHour)
-                        fattyEvents[c.iov_0] = {'iov_0':c.iov_0,'iov_1':c.iov_1}
-                        fattyEvents[c.iov_0]['BGEffect'] = bolusSlice
-                        fattyEvents[c.iov_0]['Ta_tempBasal'] = Ta_tempBasal
-                        fattyEvents[c.iov_0]['fractionOfBasal'] = basalFactor-1
+                    if c.iov_0_utc not in fattyEvents.keys() :
+                        Ta_tempBasal = (c.iov_1_utc - c.iov_0_utc) / float(3600.)
+                        fattyEvents[c.iov_0_utc] = {'iov_0_utc':c.iov_0_utc,'iov_1_utc':c.iov_1_utc}
+                        fattyEvents[c.iov_0_utc]['BGEffect'] = bolusSlice
+                        fattyEvents[c.iov_0_utc]['Ta_tempBasal'] = Ta_tempBasal
+                        fattyEvents[c.iov_0_utc]['fractionOfBasal'] = basalFactor-1
                     else :
-                        fattyEvents[c.iov_0]['BGEffect'] += bolusSlice
+                        fattyEvents[c.iov_0_utc]['BGEffect'] += bolusSlice
 
             # Now check for Suspend, which should preempt TempBasals
             for c in containers :
                 if not c.IsSuspend() :
                     continue
-                if c.iov_0 < time_ut and time_ut < c.iov_1 :
+                if c.iov_0_utc < time_ut and time_ut < c.iov_1_utc :
                     basalFactor = c.basalFactor
 
             # Finally, make the mini-bolus for the basal insulin.
@@ -370,15 +408,23 @@ class BasalInsulin(BGEventBase) :
             minibolus = InsulinBolus(time_ut,bolus_val)
             self.basalBoluses.append(minibolus)
 
-            time_ut += time_step_hr*MyTime.OneHour
+            time_ut += time_step_hr*3600.
 
         for k in fattyEvents.keys() :
             fe = fattyEvents[k]
-            fattyEvent = LiverFattyGlucose(fe['iov_0'],fe['iov_1'],fe['BGEffect'],fe['Ta_tempBasal'],fe['fractionOfBasal'])
+            fattyEvent = LiverFattyGlucose(fe['iov_0_utc'],fe['iov_1_utc'],fe['BGEffect'],fe['Ta_tempBasal'],fe['fractionOfBasal'])
             fattyEvent.Print()
             containers.append(fattyEvent)
 
         return
+
+    @classmethod
+    def FromStringDate(cls,iov_0_str,iov_1_str,basal_rates,sensitivities=[],containers=[]) :
+
+        iov_0_utc = BGEventBase.GetUtcFromString(iov_0_str)
+        iov_1_utc = BGEventBase.GetUtcFromString(iov_1_str)
+
+        return cls(iov_0_utc,iov_1_utc,basal_rates,sensitivities,containers)
 
     def getBGEffectDerivPerHourTimesInterval(self,time_start,delta_hr,settings) :
         return sum(c.getBGEffectDerivPerHourTimesInterval(time_start,delta_hr,settings) for c in self.basalBoluses)
@@ -397,10 +443,21 @@ class TempBasal(BGEventBase) :
 
     # This class is designed to communicate with the BasalInsulin class.
 
-    def __init__(self,iov_0,iov_1,basalFactor) :
-        BGEventBase.__init__(self,iov_0,iov_1)
+    def __init__(self,iov_0_utc,iov_1_utc,basalFactor) :
+        BGEventBase.__init__(self,iov_0_utc,iov_1_utc)
         self.affectsBG = False
+
+        # value in % (e.g. 100% is the nominal)
         self.basalFactor = basalFactor
+
+    @classmethod
+    def FromStringDate(cls,iov_0_str,iov_1_str,basalFactor) :
+
+        iov_0_utc = BGEventBase.GetUtcFromString(iov_0_str)
+        iov_1_utc = BGEventBase.GetUtcFromString(iov_1_str)
+
+        return cls(iov_0_utc,iov_1_utc,basalFactor)
+
 
 #------------------------------------------------------------------
 class Suspend(TempBasal) :
@@ -408,9 +465,17 @@ class Suspend(TempBasal) :
     # Very similar to TempBasal, except that we need a different class
     # because Suspend takes precedence over TempBasal
 
-    def __init__(self,iov_0,iov_1) :
-        TempBasal.__init__(self,iov_0,iov_1,0)
+    def __init__(self,iov_0_utc,iov_1_utc) :
+        TempBasal.__init__(self,iov_0_utc,iov_1_utc,0)
         self.affectsBG = False
+
+    @classmethod
+    def FromStringDate(cls,iov_0_str,iov_1_str) :
+
+        iov_0_utc = BGEventBase.GetUtcFromString(iov_0_str)
+        iov_1_utc = BGEventBase.GetUtcFromString(iov_1_str)
+
+        return cls(iov_0_utc,iov_1_utc)
 
 #------------------------------------------------------------------
 class LiverFattyGlucose(BGActionBase) :
@@ -420,7 +485,7 @@ class LiverFattyGlucose(BGActionBase) :
     # to insulin or food or something.
 
     def __init__(self,time_start,time_end,BGEffect,Ta_tempBasal,fractionOfBasal) :
-        BGActionBase.__init__(self,time_start,time_end + 6.*MyTime.OneHour)
+        BGActionBase.__init__(self,time_start,time_end + 6.*3600.)
         self.affectsBG = True
 
         # We keep track of this only in terms of BG effect.
@@ -468,11 +533,11 @@ class LiverFattyGlucose(BGActionBase) :
 
     def Print(self) :
         cout = 'LiverFattyGlucose:'
-        cout += ' %s -'%(MyTime.StringFromTime(self.iov_0))
-        cout += ' %s,' %(MyTime.StringFromTime(self.iov_1))
+        cout += ' %s -'%(time.ctime(self.iov_0_utc))
+        cout += ' %s,' %(time.ctime(self.iov_1_utc))
         bg = ('%.0f'%(self.BGEffect)).rjust(3)
         cout += ' BGEffect: %s mg/dL, lifetime: %2.1f'%(bg,self.Ta)
-        print cout + '\n'
+        print(cout + '\n')
         return
 
     def PrintSuggestion(self,settings) :
@@ -486,15 +551,15 @@ class LiverFattyGlucose(BGActionBase) :
         if abs(self.original_value - self.BGEffect)/float(self.BGEffect) < 0.1 :
             return
 
-        Sfood = float(settings.getFoodSensitivity(self.iov_0))
+        Sfood = float(settings.getFoodSensitivity(self.iov_0_utc))
         tempBasal_old = 100*(1 + self.fractionOfBasal)
         tempBasal_new = 100*(1 + (self.fractionOfBasal * self.BGEffect/float(self.original_value) ) )
         recommendation = '** Recommend TEMP BASAL'
-        recommendation += ' at %s'%(MyTime.StringFromTime(self.iov_0))
+        recommendation += ' at %s'%(time.ctime(self.iov_0_utc))
         recommendation += ' %d -> %d mgdL'%(self.original_value,self.BGEffect)
         recommendation += ' (%d -> %d grams)'%(self.original_value/Sfood,self.BGEffect/Sfood)
         recommendation += ' (%d%% -> %d%% for %.2f hours)'%(tempBasal_old,tempBasal_new,self.Ta_tempBasal)
-        print recommendation
+        print(recommendation)
         return recommendation
 
 #------------------------------------------------------------------
@@ -503,8 +568,8 @@ class ExerciseEffect(BGEventBase) :
     # This will calculate the "multiplier effect" that exercise has on insulin,
     # and its effect is the sum of those effects.
     #
-    def __init__(self,iov_0,iov_1,factor,containers=[]) :
-        BGEventBase.__init__(self,iov_0,iov_1)
+    def __init__(self,iov_0_utc,iov_1_utc,factor,containers=[]) :
+        BGEventBase.__init__(self,iov_0_utc,iov_1_utc)
         self.affectsBG = True
         self.factor = factor
         self.affectedEvents = []
@@ -514,10 +579,10 @@ class ExerciseEffect(BGEventBase) :
 
     def LoadContainers(self,containers) :
         for c in containers :
-            if c.iov_0 > self.iov_1 :
+            if c.iov_0_utc > self.iov_1_utc :
                 continue
 
-            if c.iov_1 < self.iov_0 :
+            if c.iov_1_utc < self.iov_0_utc :
                 continue
 
             # Consider only insulin
@@ -534,21 +599,21 @@ class ExerciseEffect(BGEventBase) :
     def getMagnitudeOfBGEffect(self,settings) :
         mag = 0
 
-        time_step = self.iov_0
+        time_step = self.iov_0_utc
         hours_per_step = 0.1
 
-        while time_step < self.iov_1 :
+        while time_step < self.iov_1_utc :
 
             for c in self.affectedEvents :
                 mag += c.getBGEffectDerivPerHourTimesInterval(time_step,hours_per_step,settings)
 
-            time_step += (hours_per_step * MyTime.OneHour)
+            time_step += dt.timedelta(hours=hours_per_step).total_seconds()
 
         return mag * self.factor
 
     def getBGEffectDerivPerHour(self,time_ut,settings) :
         deriv = 0
-        if self.iov_0 > time_ut or time_ut > self.iov_1 :
+        if self.iov_0_utc > time_ut or time_ut > self.iov_1_utc :
             return 0
 
         for c in self.affectedEvents :
@@ -558,7 +623,7 @@ class ExerciseEffect(BGEventBase) :
 
     def getBGEffectDerivPerHourTimesInterval(self,time_start,delta_hr,settings) :
         ret = 0
-        if self.iov_0 > time_start or time_start > self.iov_1 :
+        if self.iov_0_utc > time_start or time_start > self.iov_1_utc :
             return 0
 
         for c in self.affectedEvents :
@@ -569,7 +634,7 @@ class ExerciseEffect(BGEventBase) :
     def getIntegral(self,time_start,time_end,settings) :
 
         ret = 0
-        if self.iov_0 > time_start or time_end > self.iov_1 :
+        if self.iov_0_utc > time_start or time_end > self.iov_1_utc :
             return 0
 
         for c in self.affectedEvents :
