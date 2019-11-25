@@ -333,7 +333,6 @@ class LiverBasalGlucose(BGEventBase) :
         # Same, but for the smeared list:
         return self.getSmearedList(settings)[self.getBin(time_ut)]
 
-
 #------------------------------------------------------------------
 class BasalInsulin(BGEventBase) :
     # This is driven by the basal settings, but it is NOT a parameter of interest, it is a known
@@ -345,7 +344,7 @@ class BasalInsulin(BGEventBase) :
         # From 4am ... and assuming 48 bins
         return int(2 * (time.localtime(time_ut).tm_hour + time.localtime(time_ut).tm_min/60.) )
 
-    def __init__(self,iov_0_utc,iov_1_utc,basal_rates,sensitivities=[],containers=[]) :
+    def __init__(self,iov_0_utc,iov_1_utc,basal_rates,sensitivities=None,containers=[]) :
         BGEventBase.__init__(self,iov_0_utc,iov_1_utc)
         self.affectsBG = True
         self.BasalRates = [0]*48
@@ -353,7 +352,7 @@ class BasalInsulin(BGEventBase) :
 
         # Insulin sensitivity is needed to make liver events
         tmp_InsulinSensitivityList = [0]*48
-        if sensitivities :
+        if type(sensitivities) != type(None) :
             TrueUserProfile.SettingsArrayToList(sensitivities,tmp_InsulinSensitivityList)
 
         self.basalBoluses = []

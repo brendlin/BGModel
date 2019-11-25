@@ -47,7 +47,6 @@ class UserSetting :
         # The input, timeOfDay, is in hours (float), starting from MIDNIGHT
 
         settings_list = self.getOrMakeSettingsSnapshot_list(timestamp)
-        print('list:',settings_list)
 
         timeOfDay_dt = dt.timedelta(hours=timeOfDay_hr)
 
