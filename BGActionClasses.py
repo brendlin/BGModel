@@ -1,5 +1,5 @@
-from BGBaseClasses import *
-from Settings import *
+from .BGBaseClasses import *
+from .Settings import *
 import datetime as dt
 
 #------------------------------------------------------------------
