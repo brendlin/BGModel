@@ -135,11 +135,19 @@ class TrueUserProfile :
     def getInsulinTa(self,time_ut) :
         return self.InsulinTa[self.getBin(time_ut)]
 
+    def setInsulinTa(self,val) :
+        for i in range(self.nBins) :
+            self.InsulinTa[i] = val
+
     def getInsulinTaHrMidnight(self,time_hr) :
         return self.InsulinTa[self.getBinFromHourOfDay(time_hr)]
 
     def getFoodTa(self,time_ut) :
         return self.FoodTa[self.getBin(time_ut)]
+
+    def setFoodTa(self,val) :
+        for i in range(self.nBins) :
+            self.FoodTa[i] = val
 
     def getFoodTaHrMidnight(self,time_hr) :
         return self.FoodTa[self.getBinFromHourOfDay(time_hr)]
