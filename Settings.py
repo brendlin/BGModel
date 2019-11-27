@@ -104,7 +104,7 @@ class TrueUserProfile :
         # input (outlist) is a list with 48 entries
 
         for i in range(len(outlist)) :
-            time_hr = i / float( 24./float(len(outlist)) )
+            time_hr = i * 24. / float(len(outlist))
             outlist[i] = UserSetting.GetSettingAtTime(the_settings_array,time_hr)
 
         return
@@ -120,6 +120,9 @@ class TrueUserProfile :
     def getInsulinSensitivity(self,time_ut) :
         return self.InsulinSensitivity[self.getBin(time_ut)]
 
+    def getInsulinSensitivityHrMidnight(self,time_hr) :
+        return self.InsulinSensitivity[self.getBinFromHourOfDay(time_hr)]
+
     def getFoodSensitivity(self,time_ut) :
         return self.FoodSensitivity[self.getBin(time_ut)]
 
@@ -132,11 +135,20 @@ class TrueUserProfile :
     def getInsulinTa(self,time_ut) :
         return self.InsulinTa[self.getBin(time_ut)]
 
+    def getInsulinTaHrMidnight(self,time_hr) :
+        return self.InsulinTa[self.getBinFromHourOfDay(time_hr)]
+
     def getFoodTa(self,time_ut) :
         return self.FoodTa[self.getBin(time_ut)]
 
+    def getFoodTaHrMidnight(self,time_hr) :
+        return self.FoodTa[self.getBinFromHourOfDay(time_hr)]
+
     def getLiverHourlyGlucose(self,time_ut) :
         return self.LiverHourlyGlucose[self.getBin(time_ut)]
+
+    def getLiverHourlyGlucoseHrMidnight(self,time_hr) :
+        return self.LiverHourlyGlucose[self.getBinFromHourOfDay(time_hr)]
 
     def SetInsulinSensitivity(self,time_hr,val) :
         # specify the time starting from midnight!
