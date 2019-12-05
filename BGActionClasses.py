@@ -352,7 +352,7 @@ class BasalInsulin(BGEventBase) :
 
         # Insulin sensitivity is needed to make liver events
         tmp_InsulinSensitivityList = [0]*48
-        if type(sensitivities) != type(None) :
+        if type(sensitivities) == type(np.array([])) :
             TrueUserProfile.SettingsArrayToList(sensitivities,tmp_InsulinSensitivityList)
 
         self.basalBoluses = []

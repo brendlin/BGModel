@@ -12,7 +12,7 @@ class UserSetting :
     def __init__(self,_type_of_setting) :
 
         self.dtype = [('time','timedelta64[s]'),('value','float')]
-        self.settings_24h = OrderedDict()
+        self.settings_24h = []
         self.type_of_setting = _type_of_setting
         return
 
@@ -23,7 +23,7 @@ class UserSetting :
         if not self.settings_24h :
             print('warning! No insulin-carb ratio on record!')
         else :
-            latest_snapshot = list(self.settings_24h.values())[-1]
+            latest_snapshot = list(self.settings_24h[-1][1])
             return self.ToNumpyArray(latest_snapshot)
 
         return None
@@ -31,17 +31,38 @@ class UserSetting :
     def getOrMakeSettingsSnapshot_list(self,timestamp) :
 
         # Get the latest settings snapshot, if it exists
-        if timestamp in self.settings_24h.keys() :
-            return self.settings_24h[timestamp]
+        for setting in self.settings_24h :
+            if setting[0] == timestamp :
+                return setting[1]
 
         # If it does not exist, make a new one:
-        self.settings_24h[timestamp] = [] # np.arange(dt.timedelta(hours=0),dt.timedelta(hours=24),dt.timedelta(hours=0.5))
+        self.settings_24h.append([timestamp,[]])
 
-        return self.settings_24h[timestamp]
+        # sort by utc time
+        self.settings_24h.sort(key=lambda x: time.mktime(time.strptime(x[0], "%Y-%m-%d %H:%M:%S")))
+
+        return self.getOrMakeSettingsSnapshot_list(timestamp)
 
     def getOrMakeSettingsSnapshot(self,timestamp) :
 
         return self.ToNumpyArray(self.getOrMakeSettingsSnapshot_list(timestamp))
+
+    def getValidSnapshotAtTime(self,timestamp) :
+
+        the_time = time.mktime(time.strptime(timestamp.replace('T',' '), "%Y-%m-%d %H:%M:%S"))
+
+        for i in range(len(self.settings_24h)-1) :
+
+            iov_0 = time.mktime(time.strptime(self.settings_24h[i][0].replace('T',' '), "%Y-%m-%d %H:%M:%S"))
+            iov_1 = time.mktime(time.strptime(self.settings_24h[i+1][0].replace('T',' '), "%Y-%m-%d %H:%M:%S"))
+
+            if i == 0 and the_time < iov_0 :
+                return self.settings_24h[i][1]
+
+            if the_time >= iov_0 and the_time < iov_1 :
+                return self.settings_24h[i][1]
+
+        return self.settings_24h[-1][1]
 
     def AddSettingToSnapshot(self,timestamp,timeOfDay_hr,value) :
         # The input, timeOfDay, is in hours (float), starting from MIDNIGHT
