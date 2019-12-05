@@ -39,7 +39,7 @@ class UserSetting :
         self.settings_24h.append([timestamp,[]])
 
         # sort by utc time
-        self.settings_24h.sort(key=lambda x: time.mktime(time.strptime(x[0], "%Y-%m-%d %H:%M:%S")))
+        self.settings_24h.sort(key=lambda x: time.mktime(time.strptime(x[0].replace('T',' '), "%Y-%m-%d %H:%M:%S")))
 
         return self.getOrMakeSettingsSnapshot_list(timestamp)
 
