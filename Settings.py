@@ -2,6 +2,7 @@ import numpy as np
 from collections import OrderedDict
 import datetime as dt
 import time
+import json
 
 #
 # This is meant to store a list of settings snapshots, with the day starting from 12am.
@@ -11,10 +12,20 @@ class UserSetting :
 
     def __init__(self,_type_of_setting) :
 
-        self.dtype = [('time','timedelta64[s]'),('value','float')]
+        self.dtype = [('time_seconds','int'),('value','float')]
         self.settings_24h = []
         self.type_of_setting = _type_of_setting
         return
+
+    def toJson(self) :
+        return json.dumps({'type_of_setting':self.type_of_setting,'settings_24h':self.settings_24h})
+
+    @classmethod
+    def fromJson(cls,json_string) :
+        the_dict = json.loads(json_string)
+        the_class = cls(the_dict['type_of_setting'])
+        the_class.settings_24h = the_dict['settings_24h']
+        return the_class
 
     def ToNumpyArray(self,settings_list) :
         return np.array(settings_list, dtype=self.dtype)
@@ -69,14 +80,14 @@ class UserSetting :
 
         settings_list = self.getOrMakeSettingsSnapshot_list(timestamp)
 
-        timeOfDay_dt = dt.timedelta(hours=timeOfDay_hr)
+        timeOfDay_seconds = int(dt.timedelta(hours=timeOfDay_hr).total_seconds())
 
         index = 0
         if len(settings_list) :
             first,second = zip(*settings_list)
-            index = np.searchsorted(first,timeOfDay_dt,side='right')
+            index = np.searchsorted(first,timeOfDay_seconds,side='right')
 
-        settings_list.insert( index, (timeOfDay_dt,value) )
+        settings_list.insert( index, (timeOfDay_seconds,value) )
 
         return
 
@@ -89,8 +100,8 @@ class UserSetting :
             'Missing settings - exiting.'
             import sys; sys.exit();
 
-        timeOfDay_dt = dt.timedelta(hours=timeOfDay_hr)
-        index = np.searchsorted(settings['time'],timeOfDay_dt,side='right')
+        timeOfDay_seconds = int(dt.timedelta(hours=timeOfDay_hr).total_seconds())
+        index = np.searchsorted(settings['time_seconds'],timeOfDay_seconds,side='right')
 
         return settings['value'][index-1]
 
@@ -118,6 +129,23 @@ class TrueUserProfile :
         self.LiverHourlyGlucose = [0]*self.nBins # There is going to be a timing offset issue here.
 
         return
+
+    def toJson(self) :
+        return json.dumps({'binWidth_hr':self.binWidth_hr,
+                           'nBins':self.nBins,
+                           'InsulinSensitivity':self.InsulinSensitivity,
+                           'FoodSensitivity':self.FoodSensitivity,
+                           'FoodTa':self.FoodTa,
+                           'InsulinTa':self.InsulinTa,
+                           'LiverHourlyGlucose':self.LiverHourlyGlucose})
+
+    @classmethod
+    def fromJson(cls,json_string) :
+        the_dict = json.loads(json_string)
+        the_class = cls()
+        for key in the_dict.keys() :
+            setattr(the_class,key,the_dict[key])
+        return the_class
 
     @staticmethod
     def SettingsArrayToList(the_settings_array,outlist) :
