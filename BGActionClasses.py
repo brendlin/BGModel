@@ -354,6 +354,9 @@ class BasalInsulin(BGEventBase) :
         tmp_InsulinSensitivityList = [0]*48
         if type(sensitivities) == type(np.array([])) :
             TrueUserProfile.SettingsArrayToList(sensitivities,tmp_InsulinSensitivityList)
+        elif type(sensitivities) == type([]) :
+            tmp_InsulinSensitivityList = sensitivities
+
 
         self.basalBoluses = []
 

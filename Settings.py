@@ -73,7 +73,7 @@ class UserSetting :
             if the_time >= iov_0 and the_time < iov_1 :
                 return self.settings_24h[i][1]
 
-        return self.settings_24h[-1][1]
+        return self.ToNumpyArray(self.settings_24h[-1][1])
 
     def AddSettingToSnapshot(self,timestamp,timeOfDay_hr,value) :
         # The input, timeOfDay, is in hours (float), starting from MIDNIGHT
