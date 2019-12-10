@@ -12,7 +12,7 @@ class UserSetting :
 
     def __init__(self,_type_of_setting) :
 
-        self.dtype = [('time_seconds','int'),('value','float')]
+        self.dtype = [('time_seconds',np.int32),('value',np.float64)]
         self.settings_24h = []
         self.type_of_setting = _type_of_setting
         return
@@ -24,7 +24,14 @@ class UserSetting :
     def fromJson(cls,json_string) :
         the_dict = json.loads(json_string)
         the_class = cls(the_dict['type_of_setting'])
-        the_class.settings_24h = the_dict['settings_24h']
+
+        # convert each to a tuple... sorry this is really gross.
+        for setting in the_dict['settings_24h'] :
+            hour_by_hour = []
+            for setting_at_time_of_day in setting[1] :
+                hour_by_hour.append((setting_at_time_of_day[0],setting_at_time_of_day[1]))
+            the_class.settings_24h.append([setting[0],hour_by_hour])
+
         return the_class
 
     def ToNumpyArray(self,settings_list) :
@@ -47,7 +54,7 @@ class UserSetting :
                 return setting[1]
 
         # If it does not exist, make a new one:
-        self.settings_24h.append([timestamp,[]])
+        self.settings_24h.append((timestamp,[]))
 
         # sort by utc time
         self.settings_24h.sort(key=lambda x: time.mktime(time.strptime(x[0].replace('T',' '), "%Y-%m-%d %H:%M:%S")))
@@ -67,11 +74,8 @@ class UserSetting :
             iov_0 = time.mktime(time.strptime(self.settings_24h[i][0].replace('T',' '), "%Y-%m-%d %H:%M:%S"))
             iov_1 = time.mktime(time.strptime(self.settings_24h[i+1][0].replace('T',' '), "%Y-%m-%d %H:%M:%S"))
 
-            if i == 0 and the_time < iov_0 :
-                return self.settings_24h[i][1]
-
-            if the_time >= iov_0 and the_time < iov_1 :
-                return self.settings_24h[i][1]
+            if (i == 0 and the_time < iov_0) or (the_time >= iov_0 and the_time < iov_1) :
+                return self.ToNumpyArray(self.settings_24h[i][1])
 
         return self.ToNumpyArray(self.settings_24h[-1][1])
 
