@@ -49,7 +49,7 @@ class BGEventBase :
             except ValueError :
                 pass
 
-        print('Error: could not convert to UTC: %s or %s'%(iov_str))
+        print('Error: could not convert to UTC: %s'%(iov_str))
         import sys; sys.exit()
         return None
 
