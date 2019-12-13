@@ -387,7 +387,7 @@ class BasalInsulin(BGEventBase) :
                 # If the basalFactor >1, then
                 # Make a new LiverFattyGlucose object, add it to container list
                 if basalFactor > 1 :
-                    bolusSlice = insulin_sensi*bolus_val*(basalFactor-1)
+                    bolusSlice = -insulin_sensi*bolus_val*(basalFactor-1)
 
                     if c.iov_0_utc not in fattyEvents.keys() :
                         Ta_tempBasal = (c.iov_1_utc - c.iov_0_utc) / float(3600.)
