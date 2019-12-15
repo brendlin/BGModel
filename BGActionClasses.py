@@ -348,7 +348,10 @@ class BasalInsulin(BGEventBase) :
         BGEventBase.__init__(self,iov_0_utc,iov_1_utc)
         self.affectsBG = True
         self.BasalRates = [0]*48
-        TrueUserProfile.SettingsArrayToList(basal_rates,self.BasalRates)
+        if type(basal_rates) == type(np.array([])) :
+            TrueUserProfile.SettingsArrayToList(basal_rates,self.BasalRates)
+        elif type(sensitivities) == type([]) :
+            self.BasalRates = basal_rates
 
         # Insulin sensitivity is needed to make liver events
         tmp_InsulinSensitivityList = [0]*48
@@ -372,7 +375,6 @@ class BasalInsulin(BGEventBase) :
 
             basalFactor = 1
             bolus_val = self.BasalRates[self.getBin(time_ut)]*float(time_step_hr)*basalFactor
-            insulin_sensi = tmp_InsulinSensitivityList[self.getBin(time_ut)]
 
             # If there is a TempBasal, then modify the basalFactor
             for c in containers :
@@ -386,7 +388,8 @@ class BasalInsulin(BGEventBase) :
 
                 # If the basalFactor >1, then
                 # Make a new LiverFattyGlucose object, add it to container list
-                if basalFactor > 1 :
+                if (basalFactor > 1) and sensitivities :
+                    insulin_sensi = tmp_InsulinSensitivityList[self.getBin(time_ut)]
                     bolusSlice = -insulin_sensi*bolus_val*(basalFactor-1)
 
                     if c.iov_0_utc not in fattyEvents.keys() :
