@@ -511,6 +511,14 @@ class LiverFattyGlucose(BGActionBase) :
 
         return
 
+    @classmethod
+    def FromStringDate(cls,iov_0_str,iov_1_str,BGEffect,Ta_tempBasal,fractionOfBasal) :
+
+        iov_0_utc = BGEventBase.GetUtcFromString(iov_0_str)
+        iov_1_utc = BGEventBase.GetUtcFromString(iov_1_str)
+
+        return cls(iov_0_utc,iov_1_utc,BGEffect,Ta_tempBasal,fractionOfBasal)
+
     def getFattyGlucoseLocalTa(self,time_ut) :
         return self.Ta
 
