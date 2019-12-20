@@ -40,14 +40,23 @@ class BGEventBase :
             return iov_utc
 
         except ValueError :
+            pass
 
-            try :
-                # Tidepool format
-                iov_utc = int(time.mktime(time.strptime(iov_str, '%Y-%m-%dT%H:%M:%S')))
-                return iov_utc
+        try :
+            # Tidepool format
+            iov_utc = int(time.mktime(time.strptime(iov_str, '%Y-%m-%dT%H:%M:%S')))
+            return iov_utc
 
-            except ValueError :
-                pass
+        except ValueError :
+            pass
+
+        try :
+            # Another format
+            iov_utc = int(time.mktime(time.strptime(iov_str, '%Y-%m-%d %H:%M:%S')))
+            return iov_utc
+
+        except ValueError :
+            pass
 
         print('Error: could not convert to UTC: %s'%(iov_str))
         import sys; sys.exit()

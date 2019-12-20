@@ -582,6 +582,14 @@ class ExerciseEffect(BGEventBase) :
             self.LoadContainers(containers)
         return
 
+    @classmethod
+    def FromStringDate(cls,iov_0_str,iov_1_str,factor,containers=[]) :
+
+        iov_0_utc = BGEventBase.GetUtcFromString(iov_0_str)
+        iov_1_utc = BGEventBase.GetUtcFromString(iov_1_str)
+
+        return cls(iov_0_utc,iov_1_utc,factor)
+
     def LoadContainers(self,containers) :
         for c in containers :
             if c.iov_0_utc > self.iov_1_utc :
@@ -639,10 +647,13 @@ class ExerciseEffect(BGEventBase) :
     def getIntegral(self,time_start,time_end,settings) :
 
         ret = 0
-        if self.iov_0_utc > time_start or time_end > self.iov_1_utc :
+        if self.iov_1_utc < time_start or time_end < self.iov_0_utc :
             return 0
 
+        the_time_start = max(time_start,self.iov_0_utc)
+        the_time_end = min(time_end,self.iov_1_utc)
+
         for c in self.affectedEvents :
-            ret += c.getIntegral(time_start,time_end,settings)
+            ret += c.getIntegral(the_time_start,the_time_end,settings)
 
         return ret * self.factor
