@@ -101,8 +101,8 @@ class UserSetting :
         # The input, timeOfDay, is in hours (float), starting from midnight
 
         if not settings.size :
-            'Missing settings - exiting.'
-            import sys; sys.exit();
+            print('Missing settings.')
+            raise AttributeError
 
         timeOfDay_seconds = int(dt.timedelta(hours=timeOfDay_hr).total_seconds())
         index = np.searchsorted(settings['time_seconds'],timeOfDay_seconds,side='right')

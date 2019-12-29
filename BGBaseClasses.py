@@ -59,7 +59,7 @@ class BGEventBase :
             pass
 
         print('Error: could not convert to UTC: %s'%(iov_str))
-        import sys; sys.exit()
+        raise ValueError
         return None
 
     def Duration_hr(self) :
@@ -70,8 +70,8 @@ class BGEventBase :
             return self.affectsBG
         except AttributeError :
             print('Please indicate whether %s affects BG!'%(self.__class__.__name__))
-            import sys; sys.exit()
-        return False
+
+        raise AttributeError
 
     # Helper functions for figuring out the derived class:
     def IsMeasurement(self) :
